@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "akvorado-mcp-server"
+version = "1.0.0"
+description = "A read-only MCP server for Akvorado flow data via ClickHouse"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "clearminds"}]
+keywords = ["mcp", "akvorado", "clickhouse", "netflow", "network"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "fastmcp>=2.14.0,<3",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+]
+
+[project.urls]
+Repository = "https://github.com/clearminds/akvorado-mcp-server"
+
+[project.scripts]
+akvorado-mcp-server = "akvorado_mcp_server.server:main"
