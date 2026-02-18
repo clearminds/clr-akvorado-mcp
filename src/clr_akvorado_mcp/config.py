@@ -16,11 +16,11 @@ CREDS_PATH = Path.home() / ".config" / "akvorado" / "credentials.json"
 class Settings(BaseSettings):
     """Centralized configuration for Akvorado MCP Server.
 
-    Configuration precedence: CLI > Environment > credentials.json > .env file > Defaults
+    Configuration precedence: CLI > credentials.json > Environment > .env file > Defaults
 
     Priority order for credentials:
-    1. Environment variables (AKVORADO_SSH_HOST, AKVORADO_SSH_USER, AKVORADO_SSH_KEY)
-    2. ~/.config/akvorado/credentials.json
+    1. ~/.config/akvorado/credentials.json
+    2. Environment variables (AKVORADO_SSH_HOST, AKVORADO_SSH_USER, AKVORADO_SSH_KEY) - override
     """
 
     # SSH access to ClickHouse
@@ -47,14 +47,14 @@ class Settings(BaseSettings):
     )
 
     def load_credentials(self) -> dict[str, Any]:
-        """Load credentials with env-first, config-file-fallback pattern.
+        """Load credentials with config-file-first, env-override pattern.
 
         Returns:
             Dict with ssh_host, ssh_user, ssh_key, and optional docker_container.
         """
         creds: dict[str, Any] = {}
 
-        # 1. FIRST: Check environment variables
+        # 1. FIRST: Load from environment variables (base/fallback)
         if self.akvorado_ssh_host:
             creds["ssh_host"] = self.akvorado_ssh_host
         if self.akvorado_ssh_user:
@@ -64,24 +64,18 @@ class Settings(BaseSettings):
         if self.akvorado_docker_container:
             creds["docker_container"] = self.akvorado_docker_container
 
-        # If we have all required creds from env, return early
-        if creds.get("ssh_host") and creds.get("ssh_user"):
-            logger.info("Using Akvorado credentials from environment variables")
-            return creds
-
-        # 2. FALLBACK: Check credentials.json file
+        # 2. THEN: Override with credentials.json file (takes priority)
         if CREDS_PATH.exists():
             try:
                 file_creds: dict[str, Any] = json.loads(CREDS_PATH.read_text())
 
-                # Only use file values if NOT already set by env vars
-                if "ssh_host" in file_creds and not creds.get("ssh_host"):
+                if "ssh_host" in file_creds:
                     creds["ssh_host"] = file_creds["ssh_host"]
-                if "ssh_user" in file_creds and not creds.get("ssh_user"):
+                if "ssh_user" in file_creds:
                     creds["ssh_user"] = file_creds["ssh_user"]
-                if "ssh_key" in file_creds and not creds.get("ssh_key"):
+                if "ssh_key" in file_creds:
                     creds["ssh_key"] = file_creds["ssh_key"]
-                if "docker_container" in file_creds and not creds.get("docker_container"):
+                if "docker_container" in file_creds:
                     creds["docker_container"] = file_creds["docker_container"]
 
                 logger.info(f"Loaded Akvorado credentials from {CREDS_PATH}")
