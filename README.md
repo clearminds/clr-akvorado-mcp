@@ -1,13 +1,13 @@
-# akvorado-mcp-server
+# clr-akvorado-mcp
 
 Network flow analysis via Akvorado/ClickHouse
 
 ## Install
 
 ```bash
-pip install akvorado-mcp-server
+pip install clr-akvorado-mcp
 # or
-uvx akvorado-mcp-server
+uvx clr-akvorado-mcp
 ```
 
 ## Configuration
@@ -31,16 +31,16 @@ uvx akvorado-mcp-server
 See `--help` for additional options:
 
 ```bash
-akvorado-mcp-server --help
+clr-akvorado-mcp --help
 ```
 
 ## Development
 
 ```bash
-git clone https://github.com/clearminds/akvorado-mcp-server.git
-cd akvorado-mcp-server
+git clone https://github.com/clearminds/clr-akvorado-mcp.git
+cd clr-akvorado-mcp
 uv sync
-uv run akvorado-mcp-server
+uv run clr-akvorado-mcp
 ```
 
 ## License

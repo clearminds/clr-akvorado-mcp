@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "akvorado-mcp-server"
+name = "clr-akvorado-mcp"
 version = "1.0.0"
 description = "A read-only MCP server for Akvorado flow data via ClickHouse"
 requires-python = ">=3.11"
@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/clearminds/akvorado-mcp-server"
+Repository = "https://github.com/clearminds/clr-akvorado-mcp"
 
 [project.scripts]
-akvorado-mcp-server = "akvorado_mcp_server.server:main"
+clr-akvorado-mcp = "clr_akvorado_mcp.server:main"

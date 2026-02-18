@@ -7,12 +7,12 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from akvorado_mcp_server.clickhouse import (
+from clr_akvorado_mcp.clickhouse import (
     ClickHouseClient,
     auto_select_table,
     format_ipv4,
 )
-from akvorado_mcp_server.config import Settings, configure_logging
+from clr_akvorado_mcp.config import Settings, configure_logging
 
 
 def parse_cli_args() -> dict[str, Any]:
