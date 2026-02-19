@@ -429,12 +429,14 @@ def main() -> None:
     configure_logging(settings.log_level)
     logger = logging.getLogger(__name__)
 
+    creds = settings.load_credentials()
+
     logger.info("Starting Akvorado MCP Server")
     logger.info(
         "Config: ssh=%s@%s container=%s transport=%s",
-        settings.akvorado_ssh_user,
-        settings.akvorado_ssh_host,
-        settings.akvorado_docker_container,
+        creds.get("ssh_user", ""),
+        creds.get("ssh_host", ""),
+        creds.get("docker_container", ""),
         settings.transport,
     )
 
@@ -442,10 +444,10 @@ def main() -> None:
     default_limit = settings.akvorado_default_limit
 
     ch = ClickHouseClient(
-        ssh_host=settings.akvorado_ssh_host,
-        ssh_user=settings.akvorado_ssh_user,
-        ssh_key=settings.akvorado_ssh_key,
-        docker_container=settings.akvorado_docker_container,
+        ssh_host=creds.get("ssh_host", ""),
+        ssh_user=creds.get("ssh_user", ""),
+        ssh_key=creds.get("ssh_key", "~/.ssh/id_ed25519"),
+        docker_container=creds.get("docker_container", "akvorado-clickhouse-1"),
     )
 
     try:
