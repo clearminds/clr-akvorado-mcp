@@ -1,0 +1,22 @@
+name: Update Tools Reference
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**/*.py'
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger mcp-work tools reference update
+        env:
+          GH_TOKEN: ${{ secrets.MCP_WORK_TOKEN }}
+          SERVER_REPO: clr-akvorado-mcp
+          PLUGIN_NAME: akvorado
+        run: |
+          gh workflow run update-tools-reference.yml \
+            --repo clearminds/mcp-work \
+            --field server_repo="$SERVER_REPO" \
+            --field plugin_name="$PLUGIN_NAME"
