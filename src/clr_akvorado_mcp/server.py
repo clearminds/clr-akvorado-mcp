@@ -16,7 +16,12 @@ from clr_akvorado_mcp.config import Settings, configure_logging
 
 
 def parse_cli_args() -> dict[str, Any]:
-    """Parse CLI arguments for configuration overrides."""
+    """Parse CLI arguments for configuration overrides.
+
+    Returns:
+        A dictionary of argument names to values, containing only
+        explicitly provided arguments.
+    """
     parser = argparse.ArgumentParser(description="Akvorado MCP Server")
 
     parser.add_argument("--akvorado-ssh-host", type=str, help="SSH host for ClickHouse")
@@ -96,6 +101,9 @@ def akvorado_dmca_lookup(
         end_time: End of time window (ISO format, e.g. "2026-02-15 14:30:00").
         exporter: Exporter name (uses AKVORADO_DEFAULT_EXPORTER if not set).
         limit: Max results (default: 20).
+
+    Returns:
+        A list of flow records matching the port and time window.
     """
     exp = exporter or default_exporter
     lim = limit or default_limit
@@ -135,6 +143,9 @@ def akvorado_top_users(
         end_time: End of time window (ISO format).
         exporter: Exporter name (uses AKVORADO_DEFAULT_EXPORTER if not set).
         limit: Max results (default: 20).
+
+    Returns:
+        A list of records with source IPs, byte totals, and flow counts.
     """
     exp = exporter or default_exporter
     lim = limit or default_limit
@@ -170,6 +181,9 @@ def akvorado_top_asns(
         interval: ClickHouse interval (e.g. "1 HOUR", "24 HOUR", "7 DAY").
         exporter: Filter by exporter name (default: all exporters).
         limit: Max results (default: 20).
+
+    Returns:
+        A list of records with ASN number, name, country, and byte totals.
     """
     lim = limit or default_limit
     exp_filter = f"AND ExporterName = '{exporter}'" if exporter else ""
@@ -204,6 +218,9 @@ def akvorado_top_countries(
         interval: ClickHouse interval (e.g. "1 HOUR", "24 HOUR").
         exporter: Filter by exporter name (default: all).
         limit: Max results (default: 20).
+
+    Returns:
+        A list of records with country codes and byte totals.
     """
     lim = limit or default_limit
     exp_filter = f"AND ExporterName = '{exporter}'" if exporter else ""
@@ -238,6 +255,9 @@ def akvorado_interface_traffic(
     Args:
         interval: ClickHouse interval (e.g. "1 HOUR", "24 HOUR").
         exporter: Filter by exporter name (default: all).
+
+    Returns:
+        A list of records per interface with byte totals and flow counts.
     """
     exp_filter = f"AND ExporterName = '{exporter}'" if exporter else ""
 
@@ -276,6 +296,9 @@ def akvorado_detect_bittorrent(
         exporter: Exporter name (uses AKVORADO_DEFAULT_EXPORTER if not set).
         min_peers: Minimum unique peers to flag (default: 50).
         limit: Max results (default: 20).
+
+    Returns:
+        A list of IPs exceeding the peer threshold with peer and byte counts.
     """
     exp = exporter or default_exporter
     lim = limit or default_limit
@@ -318,6 +341,9 @@ def akvorado_ip_traffic(
         interval: ClickHouse interval (e.g. "1 HOUR", "24 HOUR").
         exporter: Filter by exporter name (default: all).
         limit: Max results (default: 20).
+
+    Returns:
+        A list of flow records involving the specified IP address.
     """
     lim = limit or default_limit
     ip_formatted = format_ipv4(ip)
@@ -351,6 +377,9 @@ def akvorado_ip_summary(
         ip: IP address to look up.
         interval: ClickHouse interval (e.g. "1 HOUR", "24 HOUR").
         exporter: Filter by exporter name (default: all).
+
+    Returns:
+        A dictionary with totals (bytes, flows, timestamps) and top destinations.
     """
     ip_formatted = format_ipv4(ip)
     exp_filter = f"AND ExporterName = '{exporter}'" if exporter else ""
@@ -404,7 +433,8 @@ def akvorado_raw_query(sql: str) -> str:
         sql: Full ClickHouse SQL query. Append FORMAT if desired
              (default: Pretty for text, or use FORMAT JSONEachRow for JSON).
 
-    Returns the raw query output as text.
+    Returns:
+        The raw query output as text.
     """
     return ch.query(sql)
 

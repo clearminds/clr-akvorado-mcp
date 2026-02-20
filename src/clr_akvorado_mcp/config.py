@@ -100,6 +100,11 @@ class Settings(BaseSettings):
 def configure_logging(
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
 ) -> None:
+    """Configure structured logging with console output to stderr.
+
+    Args:
+        log_level: The minimum severity level for log messages.
+    """
     config: dict[str, Any] = {
         "version": 1,
         "disable_existing_loggers": False,

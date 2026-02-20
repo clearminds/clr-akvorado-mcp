@@ -26,7 +26,17 @@ class ClickHouseClient:
         self.docker_container = docker_container
 
     def query(self, sql: str) -> str:
-        """Execute a ClickHouse query and return raw text output."""
+        """Execute a ClickHouse query and return raw text output.
+
+        Args:
+            sql: The SQL query string to execute.
+
+        Returns:
+            The trimmed stdout from the ClickHouse client.
+
+        Raises:
+            RuntimeError: If the query exits with a non-zero return code.
+        """
         logger.debug("Executing query: %s", sql[:200])
         result = subprocess.run(
             [
@@ -60,6 +70,12 @@ class ClickHouseClient:
         """Execute a query and return parsed JSON rows.
 
         Appends FORMAT JSONEachRow if no FORMAT clause present.
+
+        Args:
+            sql: The SQL query string to execute.
+
+        Returns:
+            A list of dictionaries, one per result row.
         """
         if "FORMAT" not in sql.upper():
             sql = sql.rstrip().rstrip(";") + "\nFORMAT JSONEachRow"
@@ -82,6 +98,13 @@ def auto_select_table(start: str, end: str) -> str:
     - <= 7 days: flows (raw)
     - 7-90 days: flows_5m0s
     - > 90 days: flows_1h0m0s
+
+    Args:
+        start: Start timestamp in ISO format.
+        end: End timestamp in ISO format.
+
+    Returns:
+        The ClickHouse table name appropriate for the time span.
     """
     try:
         start_dt = datetime.fromisoformat(start)
@@ -97,7 +120,14 @@ def auto_select_table(start: str, end: str) -> str:
 
 
 def format_ipv4(ip: str) -> str:
-    """Convert IPv4 address to ClickHouse IPv4-mapped IPv6 format."""
+    """Convert IPv4 address to ClickHouse IPv4-mapped IPv6 format.
+
+    Args:
+        ip: An IPv4 or IPv6 address string.
+
+    Returns:
+        The address in ``::ffff:x.x.x.x`` format, or unchanged if already IPv6.
+    """
     if ":" in ip:
         return ip  # Already IPv6
     return f"::ffff:{ip}"
