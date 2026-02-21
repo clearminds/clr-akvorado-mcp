@@ -15,12 +15,11 @@ from clr_akvorado_mcp.clickhouse import (
 from clr_akvorado_mcp.config import Settings, configure_logging
 
 
-def parse_cli_args() -> dict[str, Any]:
+def parse_cli_args() -> tuple[dict[str, Any], bool | None]:
     """Parse CLI arguments for configuration overrides.
 
     Returns:
-        A dictionary of argument names to values, containing only
-        explicitly provided arguments.
+        A tuple of (overlay dict, read_only flag).
     """
     parser = argparse.ArgumentParser(description="Akvorado MCP Server")
 
@@ -47,6 +46,12 @@ def parse_cli_args() -> dict[str, Any]:
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Log level",
     )
+    parser.add_argument(
+        "--read-only",
+        action="store_true",
+        default=None,
+        help="Run in read-only mode (hide write tools)",
+    )
 
     args = parser.parse_args()
 
@@ -67,13 +72,15 @@ def parse_cli_args() -> dict[str, Any]:
         if val is not None:
             overlay[key] = val
 
-    return overlay
+    return overlay, args.read_only
 
 
 mcp = FastMCP("Akvorado")
 ch: ClickHouseClient | None = None
 default_exporter: str = ""
 default_limit: int = 20
+
+WRITE_TOOLS: list[str] = []
 
 
 # ---------------------------------------------------------------------------
@@ -448,7 +455,7 @@ def main() -> None:
     """Main entry point for the Akvorado MCP server."""
     global ch, default_exporter, default_limit
 
-    cli_overlay = parse_cli_args()
+    cli_overlay, cli_read_only = parse_cli_args()
 
     try:
         settings = Settings(**cli_overlay)
@@ -479,6 +486,12 @@ def main() -> None:
         ssh_key=creds.get("ssh_key", "~/.ssh/id_ed25519"),
         docker_container=creds.get("docker_container", "akvorado-clickhouse-1"),
     )
+
+    read_only = cli_read_only if cli_read_only is not None else settings.akvorado_read_only
+    if read_only and WRITE_TOOLS:
+        for name in WRITE_TOOLS:
+            mcp.remove_tool(name)
+        logger.info("Read-only mode: %d write tools removed", len(WRITE_TOOLS))
 
     try:
         if settings.transport == "stdio":

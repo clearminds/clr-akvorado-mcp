@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     # Default query settings
     akvorado_default_exporter: str = ""
     akvorado_default_limit: int = 20
+    akvorado_read_only: bool = False
 
     transport: Literal["stdio", "http"] = "stdio"
     host: str = "127.0.0.1"
