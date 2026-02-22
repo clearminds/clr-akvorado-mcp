@@ -9,6 +9,7 @@ from fastmcp import FastMCP
 
 from clr_akvorado_mcp.api_client import AkvoradoAPIClient
 from clr_akvorado_mcp.config import Settings, configure_logging
+from clr_akvorado_mcp.middleware import ToolValidationMiddleware
 
 
 def parse_cli_args() -> tuple[dict[str, Any], bool | None]:
@@ -60,6 +61,7 @@ def parse_cli_args() -> tuple[dict[str, Any], bool | None]:
 
 
 mcp = FastMCP("Akvorado")
+mcp.add_middleware(ToolValidationMiddleware())
 api: AkvoradoAPIClient | None = None
 
 WRITE_TOOLS: list[str] = []
