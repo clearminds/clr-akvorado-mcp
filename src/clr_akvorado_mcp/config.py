@@ -20,18 +20,15 @@ class Settings(BaseSettings):
 
     Priority order for credentials:
     1. ~/.config/akvorado/credentials.json
-    2. Environment variables (AKVORADO_SSH_HOST, AKVORADO_SSH_USER, AKVORADO_SSH_KEY) - override
+    2. Environment variables (AKVORADO_API_URL, AKVORADO_API_USER, AKVORADO_API_PASSWORD) - override
     """
 
-    # SSH access to ClickHouse
-    akvorado_ssh_host: str = ""
-    akvorado_ssh_user: str = ""
-    akvorado_ssh_key: str = "~/.ssh/id_ed25519"
-    akvorado_docker_container: str = "akvorado-clickhouse-1"
+    # HTTP Console API
+    akvorado_api_url: str = ""
+    akvorado_api_user: str = ""
+    akvorado_api_password: str = ""
 
     # Default query settings
-    akvorado_default_exporter: str = ""
-    akvorado_default_limit: int = 20
     akvorado_read_only: bool = False
 
     transport: Literal["stdio", "http"] = "stdio"
@@ -51,48 +48,39 @@ class Settings(BaseSettings):
         """Load credentials with config-file-first, env-override pattern.
 
         Returns:
-            Dict with ssh_host, ssh_user, ssh_key, and optional docker_container.
+            Dict with api_url, api_user, api_password.
         """
         creds: dict[str, Any] = {}
 
         # 1. FIRST: Load from environment variables (base/fallback)
-        if self.akvorado_ssh_host:
-            creds["ssh_host"] = self.akvorado_ssh_host
-        if self.akvorado_ssh_user:
-            creds["ssh_user"] = self.akvorado_ssh_user
-        if self.akvorado_ssh_key:
-            creds["ssh_key"] = self.akvorado_ssh_key
-        if self.akvorado_docker_container:
-            creds["docker_container"] = self.akvorado_docker_container
+        if self.akvorado_api_url:
+            creds["api_url"] = self.akvorado_api_url
+        if self.akvorado_api_user:
+            creds["api_user"] = self.akvorado_api_user
+        if self.akvorado_api_password:
+            creds["api_password"] = self.akvorado_api_password
 
         # 2. THEN: Override with credentials.json file (takes priority)
         if CREDS_PATH.exists():
             try:
                 file_creds: dict[str, Any] = json.loads(CREDS_PATH.read_text())
 
-                if "ssh_host" in file_creds:
-                    creds["ssh_host"] = file_creds["ssh_host"]
-                if "ssh_user" in file_creds:
-                    creds["ssh_user"] = file_creds["ssh_user"]
-                if "ssh_key" in file_creds:
-                    creds["ssh_key"] = file_creds["ssh_key"]
-                if "docker_container" in file_creds:
-                    creds["docker_container"] = file_creds["docker_container"]
+                if "api_url" in file_creds:
+                    creds["api_url"] = file_creds["api_url"]
+                if "api_user" in file_creds:
+                    creds["api_user"] = file_creds["api_user"]
+                if "api_password" in file_creds:
+                    creds["api_password"] = file_creds["api_password"]
 
-                logger.info(f"Loaded Akvorado credentials from {CREDS_PATH}")
+                logger.info("Loaded Akvorado credentials from %s", CREDS_PATH)
             except (json.JSONDecodeError, KeyError) as e:
-                logger.warning(f"Failed to load {CREDS_PATH}: {e}")
+                logger.warning("Failed to load %s: %s", CREDS_PATH, e)
 
-        # Set defaults
-        if not creds.get("ssh_key"):
-            creds["ssh_key"] = "~/.ssh/id_ed25519"
-        if not creds.get("docker_container"):
-            creds["docker_container"] = "akvorado-clickhouse-1"
-
-        if not (creds.get("ssh_host") and creds.get("ssh_user")):
+        if not (creds.get("api_url") and creds.get("api_user")):
             logger.warning(
-                "No Akvorado credentials configured. Set AKVORADO_SSH_HOST/AKVORADO_SSH_USER "
-                f"env vars or create {CREDS_PATH}"
+                "No Akvorado API credentials configured. Set AKVORADO_API_URL/AKVORADO_API_USER "
+                "env vars or create %s",
+                CREDS_PATH,
             )
 
         return creds

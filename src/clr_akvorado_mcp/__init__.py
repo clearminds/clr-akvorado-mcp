@@ -1,3 +1,3 @@
-"""Akvorado MCP Server - Read-only MCP server for Akvorado flow data."""
+"""Akvorado MCP Server - Network flow analysis via the Akvorado Console API."""
 
 __version__ = "1.0.0"

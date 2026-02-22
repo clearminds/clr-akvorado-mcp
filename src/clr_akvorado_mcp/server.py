@@ -1,4 +1,4 @@
-"""Akvorado MCP Server — FastMCP tools for network flow analysis via ClickHouse."""
+"""Akvorado MCP Server — FastMCP tools for network flow analysis via the Akvorado Console API."""
 
 import argparse
 import logging
@@ -7,11 +7,7 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from clr_akvorado_mcp.clickhouse import (
-    ClickHouseClient,
-    auto_select_table,
-    format_ipv4,
-)
+from clr_akvorado_mcp.api_client import AkvoradoAPIClient
 from clr_akvorado_mcp.config import Settings, configure_logging
 
 
@@ -23,18 +19,9 @@ def parse_cli_args() -> tuple[dict[str, Any], bool | None]:
     """
     parser = argparse.ArgumentParser(description="Akvorado MCP Server")
 
-    parser.add_argument("--akvorado-ssh-host", type=str, help="SSH host for ClickHouse")
-    parser.add_argument("--akvorado-ssh-user", type=str, help="SSH username")
-    parser.add_argument("--akvorado-ssh-key", type=str, help="SSH key path")
-    parser.add_argument(
-        "--akvorado-docker-container", type=str, help="Docker container name"
-    )
-    parser.add_argument(
-        "--akvorado-default-exporter", type=str, help="Default exporter name"
-    )
-    parser.add_argument(
-        "--akvorado-default-limit", type=int, help="Default result limit"
-    )
+    parser.add_argument("--akvorado-api-url", type=str, help="Akvorado Console API URL")
+    parser.add_argument("--akvorado-api-user", type=str, help="API username")
+    parser.add_argument("--akvorado-api-password", type=str, help="API password")
     parser.add_argument(
         "--transport", type=str, choices=["stdio", "http"], help="MCP transport"
     )
@@ -57,12 +44,9 @@ def parse_cli_args() -> tuple[dict[str, Any], bool | None]:
 
     overlay: dict[str, Any] = {}
     for key in [
-        "akvorado_ssh_host",
-        "akvorado_ssh_user",
-        "akvorado_ssh_key",
-        "akvorado_docker_container",
-        "akvorado_default_exporter",
-        "akvorado_default_limit",
+        "akvorado_api_url",
+        "akvorado_api_user",
+        "akvorado_api_password",
         "transport",
         "host",
         "port",
@@ -76,374 +60,164 @@ def parse_cli_args() -> tuple[dict[str, Any], bool | None]:
 
 
 mcp = FastMCP("Akvorado")
-ch: ClickHouseClient | None = None
-default_exporter: str = ""
-default_limit: int = 20
+api: AkvoradoAPIClient | None = None
 
 WRITE_TOOLS: list[str] = []
 
 
 # ---------------------------------------------------------------------------
-# DMCA Investigation
+# Time-series graph
 # ---------------------------------------------------------------------------
 
 
 @mcp.tool
-def akvorado_dmca_lookup(
-    port: int,
-    start_time: str,
-    end_time: str,
-    exporter: str = "",
-    limit: int = 0,
-) -> list[dict[str, Any]]:
-    """Investigate a DMCA notice by looking up flows matching a source port in a time window.
-
-    Use this for abuse investigations — finds the internal IP that was using a
-    specific port during a specific time. If the exporter sees pre-NAT flows,
-    SrcAddr shows the internal customer IP.
-
-    Args:
-        port: Source port from the DMCA notice.
-        start_time: Start of time window (ISO format, e.g. "2026-02-15 14:00:00").
-        end_time: End of time window (ISO format, e.g. "2026-02-15 14:30:00").
-        exporter: Exporter name (uses AKVORADO_DEFAULT_EXPORTER if not set).
-        limit: Max results (default: 20).
-
-    Returns:
-        A list of flow records matching the port and time window.
-    """
-    exp = exporter or default_exporter
-    lim = limit or default_limit
-    table = auto_select_table(start_time, end_time)
-
-    return ch.query_json(f"""
-SELECT TimeReceived, SrcAddr, DstAddr, SrcPort, DstPort, Proto, Bytes,
-       InIfName, InIfDescription
-FROM {table}
-WHERE ExporterName = '{exp}'
-  AND SrcPort = {port}
-  AND TimeReceived >= '{start_time}'
-  AND TimeReceived <= '{end_time}'
-ORDER BY TimeReceived
-LIMIT {lim}
-""")
-
-
-# ---------------------------------------------------------------------------
-# Top Bandwidth Users
-# ---------------------------------------------------------------------------
-
-
-@mcp.tool
-def akvorado_top_users(
-    start_time: str,
-    end_time: str,
-    exporter: str = "",
-    limit: int = 0,
-) -> list[dict[str, Any]]:
-    """Find top bandwidth users in a time window.
-
-    Returns source IPs sorted by total bytes transferred, with interface info.
-
-    Args:
-        start_time: Start of time window (ISO format).
-        end_time: End of time window (ISO format).
-        exporter: Exporter name (uses AKVORADO_DEFAULT_EXPORTER if not set).
-        limit: Max results (default: 20).
-
-    Returns:
-        A list of records with source IPs, byte totals, and flow counts.
-    """
-    exp = exporter or default_exporter
-    lim = limit or default_limit
-    table = auto_select_table(start_time, end_time)
-
-    return ch.query_json(f"""
-SELECT SrcAddr, InIfName, InIfDescription,
-       sum(Bytes) AS total_bytes, count() AS flow_count
-FROM {table}
-WHERE ExporterName = '{exp}'
-  AND TimeReceived >= '{start_time}'
-  AND TimeReceived <= '{end_time}'
-GROUP BY SrcAddr, InIfName, InIfDescription
-ORDER BY total_bytes DESC
-LIMIT {lim}
-""")
-
-
-# ---------------------------------------------------------------------------
-# Top ASNs
-# ---------------------------------------------------------------------------
-
-
-@mcp.tool
-def akvorado_top_asns(
-    interval: str = "1 HOUR",
-    exporter: str = "",
-    limit: int = 0,
-) -> list[dict[str, Any]]:
-    """Get top Autonomous Systems by traffic volume.
-
-    Args:
-        interval: ClickHouse interval (e.g. "1 HOUR", "24 HOUR", "7 DAY").
-        exporter: Filter by exporter name (default: all exporters).
-        limit: Max results (default: 20).
-
-    Returns:
-        A list of records with ASN number, name, country, and byte totals.
-    """
-    lim = limit or default_limit
-    exp_filter = f"AND ExporterName = '{exporter}'" if exporter else ""
-
-    return ch.query_json(f"""
-SELECT SrcAS, a.name AS asn_name, SrcCountry,
-       sum(Bytes) AS total_bytes, count() AS flow_count
-FROM flows
-LEFT JOIN asns a ON flows.SrcAS = a.asn
-WHERE TimeReceived >= now() - INTERVAL {interval}
-  {exp_filter}
-GROUP BY SrcAS, a.name, SrcCountry
-ORDER BY total_bytes DESC
-LIMIT {lim}
-""")
-
-
-# ---------------------------------------------------------------------------
-# Top Countries
-# ---------------------------------------------------------------------------
-
-
-@mcp.tool
-def akvorado_top_countries(
-    interval: str = "1 HOUR",
-    exporter: str = "",
-    limit: int = 0,
-) -> list[dict[str, Any]]:
-    """Get top source countries by traffic volume.
-
-    Args:
-        interval: ClickHouse interval (e.g. "1 HOUR", "24 HOUR").
-        exporter: Filter by exporter name (default: all).
-        limit: Max results (default: 20).
-
-    Returns:
-        A list of records with country codes and byte totals.
-    """
-    lim = limit or default_limit
-    exp_filter = f"AND ExporterName = '{exporter}'" if exporter else ""
-
-    return ch.query_json(f"""
-SELECT SrcCountry, sum(Bytes) AS total_bytes, count() AS flows
-FROM flows
-WHERE TimeReceived >= now() - INTERVAL {interval}
-  AND SrcCountry <> ''
-  {exp_filter}
-GROUP BY SrcCountry
-ORDER BY total_bytes DESC
-LIMIT {lim}
-""")
-
-
-# ---------------------------------------------------------------------------
-# Interface Traffic
-# ---------------------------------------------------------------------------
-
-
-@mcp.tool
-def akvorado_interface_traffic(
-    interval: str = "1 HOUR",
-    exporter: str = "",
-) -> list[dict[str, Any]]:
-    """Get traffic breakdown by network interface.
-
-    Returns all interfaces sorted by total bytes, showing exporter,
-    interface name, description, boundary (external/internal), and flow count.
-
-    Args:
-        interval: ClickHouse interval (e.g. "1 HOUR", "24 HOUR").
-        exporter: Filter by exporter name (default: all).
-
-    Returns:
-        A list of records per interface with byte totals and flow counts.
-    """
-    exp_filter = f"AND ExporterName = '{exporter}'" if exporter else ""
-
-    return ch.query_json(f"""
-SELECT ExporterName, InIfName, InIfDescription, InIfBoundary,
-       sum(Bytes) AS total_bytes, count() AS flow_count
-FROM flows
-WHERE TimeReceived >= now() - INTERVAL {interval}
-  {exp_filter}
-GROUP BY ExporterName, InIfName, InIfDescription, InIfBoundary
-ORDER BY total_bytes DESC
-""")
-
-
-# ---------------------------------------------------------------------------
-# BitTorrent / P2P Detection
-# ---------------------------------------------------------------------------
-
-
-@mcp.tool
-def akvorado_detect_bittorrent(
-    start_time: str,
-    end_time: str,
-    exporter: str = "",
-    min_peers: int = 50,
-    limit: int = 0,
-) -> list[dict[str, Any]]:
-    """Detect BitTorrent/P2P activity by finding IPs with many unique peers.
-
-    High unique_peers (>50 distinct destinations) with many small flows
-    indicates P2P activity like BitTorrent.
-
-    Args:
-        start_time: Start of time window (ISO format).
-        end_time: End of time window (ISO format).
-        exporter: Exporter name (uses AKVORADO_DEFAULT_EXPORTER if not set).
-        min_peers: Minimum unique peers to flag (default: 50).
-        limit: Max results (default: 20).
-
-    Returns:
-        A list of IPs exceeding the peer threshold with peer and byte counts.
-    """
-    exp = exporter or default_exporter
-    lim = limit or default_limit
-    table = auto_select_table(start_time, end_time)
-
-    return ch.query_json(f"""
-SELECT SrcAddr, InIfName, InIfDescription,
-       count(DISTINCT DstAddr) AS unique_peers,
-       sum(Bytes) AS total_bytes, count() AS flow_count
-FROM {table}
-WHERE ExporterName = '{exp}'
-  AND TimeReceived >= '{start_time}'
-  AND TimeReceived <= '{end_time}'
-  AND Proto IN (6, 17)
-GROUP BY SrcAddr, InIfName, InIfDescription
-HAVING unique_peers > {min_peers}
-ORDER BY unique_peers DESC
-LIMIT {lim}
-""")
-
-
-# ---------------------------------------------------------------------------
-# IP Traffic Lookup
-# ---------------------------------------------------------------------------
-
-
-@mcp.tool
-def akvorado_ip_traffic(
-    ip: str,
-    interval: str = "1 HOUR",
-    exporter: str = "",
-    limit: int = 0,
-) -> list[dict[str, Any]]:
-    """Get all traffic for a specific IP address (source or destination).
-
-    Automatically handles IPv4-to-IPv6 mapping for ClickHouse.
-
-    Args:
-        ip: IP address to look up (IPv4 or IPv6).
-        interval: ClickHouse interval (e.g. "1 HOUR", "24 HOUR").
-        exporter: Filter by exporter name (default: all).
-        limit: Max results (default: 20).
-
-    Returns:
-        A list of flow records involving the specified IP address.
-    """
-    lim = limit or default_limit
-    ip_formatted = format_ipv4(ip)
-    exp_filter = f"AND ExporterName = '{exporter}'" if exporter else ""
-
-    return ch.query_json(f"""
-SELECT TimeReceived, SrcAddr, DstAddr, SrcPort, DstPort, Proto, Bytes
-FROM flows
-WHERE (SrcAddr = '{ip_formatted}' OR DstAddr = '{ip_formatted}')
-  AND TimeReceived >= now() - INTERVAL {interval}
-  {exp_filter}
-ORDER BY TimeReceived DESC
-LIMIT {lim}
-""")
-
-
-# ---------------------------------------------------------------------------
-# IP Summary (aggregated)
-# ---------------------------------------------------------------------------
-
-
-@mcp.tool
-def akvorado_ip_summary(
-    ip: str,
-    interval: str = "1 HOUR",
-    exporter: str = "",
+def akvorado_graph(
+    dimensions: list[str],
+    start: str,
+    end: str,
+    filter: str = "",
+    units: str = "l3bps",
+    limit: int = 10,
+    bidirectional: bool = False,
 ) -> dict[str, Any]:
-    """Get a traffic summary for an IP: total bytes, flow count, top destinations.
+    """Query Akvorado for time-series traffic data (line graph).
+
+    Returns time-series rows with dimension labels, averages, 95th percentile,
+    min, and max values. Uses the Akvorado filter language for filtering.
 
     Args:
-        ip: IP address to look up.
-        interval: ClickHouse interval (e.g. "1 HOUR", "24 HOUR").
-        exporter: Filter by exporter name (default: all).
+        dimensions: Group-by dimensions (e.g. ["SrcAS"], ["SrcAS", "ExporterName"]).
+            Valid: SrcAddr, DstAddr, SrcAS, DstAS, SrcCountry, DstCountry,
+            SrcPort, DstPort, ExporterName, InIfName, OutIfName, EType, Proto,
+            InIfBoundary, OutIfBoundary, InIfProvider, OutIfProvider.
+        start: Start time (e.g. "2026-02-15T00:00:00Z", "6 hours ago", "now-1d").
+        end: End time (e.g. "now", "2026-02-15T06:00:00Z").
+        filter: Akvorado filter expression (e.g. "InIfBoundary = external",
+            "SrcAS = 13335 AND DstPort = 443"). Empty string means no filter.
+        units: Traffic unit — "l3bps" (L3 bits/s), "l2bps" (L2 bits/s),
+            "pps" (packets/s), "inl2%" (inbound L2 %), "outl2%" (outbound L2 %).
+        limit: Max number of dimension groups to return (default 10).
+        bidirectional: If true, show both directions separately.
 
     Returns:
-        A dictionary with totals (bytes, flows, timestamps) and top destinations.
+        Graph data with time points, rows (dimension labels), and statistics.
     """
-    ip_formatted = format_ipv4(ip)
-    exp_filter = f"AND ExporterName = '{exporter}'" if exporter else ""
-
-    totals = ch.query_json(f"""
-SELECT sum(Bytes) AS total_bytes, count() AS flow_count,
-       min(TimeReceived) AS first_seen, max(TimeReceived) AS last_seen
-FROM flows
-WHERE (SrcAddr = '{ip_formatted}' OR DstAddr = '{ip_formatted}')
-  AND TimeReceived >= now() - INTERVAL {interval}
-  {exp_filter}
-""")
-
-    top_dst = ch.query_json(f"""
-SELECT DstAddr, sum(Bytes) AS bytes, count() AS flows
-FROM flows
-WHERE SrcAddr = '{ip_formatted}'
-  AND TimeReceived >= now() - INTERVAL {interval}
-  {exp_filter}
-GROUP BY DstAddr
-ORDER BY bytes DESC
-LIMIT 10
-""")
-
-    return {
-        "ip": ip,
-        "interval": interval,
-        "totals": totals[0] if totals else {},
-        "top_destinations": top_dst,
+    payload: dict[str, Any] = {
+        "start": start,
+        "end": end,
+        "dimensions": dimensions,
+        "limit": limit,
+        "units": units,
+        "bidirectional": bidirectional,
     }
+    if filter:
+        payload["filter"] = filter
+    return api.post("/api/v0/console/graph/line", json=payload)
 
 
 # ---------------------------------------------------------------------------
-# Raw Query
+# Sankey diagram
 # ---------------------------------------------------------------------------
 
 
 @mcp.tool
-def akvorado_raw_query(sql: str) -> str:
-    """Execute a raw ClickHouse SQL query against Akvorado flow data.
+def akvorado_sankey(
+    dimensions: list[str],
+    start: str,
+    end: str,
+    filter: str = "",
+    units: str = "l3bps",
+    limit: int = 10,
+) -> dict[str, Any]:
+    """Query Akvorado for Sankey flow diagram data.
 
-    The ClickHouse user has read-only access. Use this for custom queries
-    not covered by the other tools.
-
-    Key tables: flows, flows_1m0s, flows_5m0s, flows_1h0m0s
-    Lookup tables: asns (asn, name), protocols (proto, name), exporters (ip, name)
-
-    IPv4 addresses are stored as IPv6-mapped: use ::ffff:1.2.3.4 format.
+    Requires 2 or more dimensions to show traffic flow between them
+    (e.g. SrcAS -> DstAS, SrcCountry -> DstCountry -> DstPort).
 
     Args:
-        sql: Full ClickHouse SQL query. Append FORMAT if desired
-             (default: Pretty for text, or use FORMAT JSONEachRow for JSON).
+        dimensions: Group-by dimensions (must be 2+, e.g. ["SrcAS", "DstAS"]).
+        start: Start time (e.g. "6 hours ago").
+        end: End time (e.g. "now").
+        filter: Akvorado filter expression. Empty string means no filter.
+        units: Traffic unit — "l3bps", "l2bps", "pps", "inl2%", "outl2%".
+        limit: Max number of flows to return (default 10).
 
     Returns:
-        The raw query output as text.
+        Sankey data with nodes and links for flow visualization.
     """
-    return ch.query(sql)
+    payload: dict[str, Any] = {
+        "start": start,
+        "end": end,
+        "dimensions": dimensions,
+        "limit": limit,
+        "units": units,
+    }
+    if filter:
+        payload["filter"] = filter
+    return api.post("/api/v0/console/graph/sankey", json=payload)
+
+
+# ---------------------------------------------------------------------------
+# Top-N widget
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool
+def akvorado_top(
+    dimension: str,
+) -> list[dict[str, Any]]:
+    """Get top-5 by a single dimension from the Akvorado dashboard widget.
+
+    Quick summary — does not require time range. Shows the current top talkers.
+
+    Args:
+        dimension: Dimension to rank by. Valid values: "src-as", "dst-as",
+            "src-country", "dst-country", "src-port", "dst-port", "exporter",
+            "etype", "protocol".
+
+    Returns:
+        A list of top entries with name and percentage.
+    """
+    return api.get(f"/api/v0/console/widget/top/{dimension}")
+
+
+# ---------------------------------------------------------------------------
+# Exporters
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool
+def akvorado_exporters() -> list[dict[str, Any]]:
+    """List all flow exporters known to Akvorado.
+
+    Returns:
+        A list of exporter objects with name and IP information.
+    """
+    return api.get("/api/v0/console/widget/exporters")
+
+
+# ---------------------------------------------------------------------------
+# Status (dashboard overview)
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool
+def akvorado_status() -> dict[str, Any]:
+    """Get Akvorado dashboard status: flow rate, last flow, and exporters.
+
+    Combines multiple widget endpoints into a single overview.
+
+    Returns:
+        A dict with flow_rate, last_flow, and exporters.
+    """
+    flow_rate = api.get("/api/v0/console/widget/flow-rate")
+    flow_last = api.get("/api/v0/console/widget/flow-last")
+    exporters = api.get("/api/v0/console/widget/exporters")
+    return {
+        "flow_rate": flow_rate,
+        "last_flow": flow_last,
+        "exporters": exporters,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -453,7 +227,7 @@ def akvorado_raw_query(sql: str) -> str:
 
 def main() -> None:
     """Main entry point for the Akvorado MCP server."""
-    global ch, default_exporter, default_limit
+    global api
 
     cli_overlay, cli_read_only = parse_cli_args()
 
@@ -470,22 +244,25 @@ def main() -> None:
 
     logger.info("Starting Akvorado MCP Server")
     logger.info(
-        "Config: ssh=%s@%s container=%s transport=%s",
-        creds.get("ssh_user", ""),
-        creds.get("ssh_host", ""),
-        creds.get("docker_container", ""),
+        "Config: api_url=%s user=%s transport=%s",
+        creds.get("api_url", ""),
+        creds.get("api_user", ""),
         settings.transport,
     )
 
-    default_exporter = settings.akvorado_default_exporter
-    default_limit = settings.akvorado_default_limit
-
-    ch = ClickHouseClient(
-        ssh_host=creds.get("ssh_host", ""),
-        ssh_user=creds.get("ssh_user", ""),
-        ssh_key=creds.get("ssh_key", "~/.ssh/id_ed25519"),
-        docker_container=creds.get("docker_container", "akvorado-clickhouse-1"),
-    )
+    if creds.get("api_url") and creds.get("api_user"):
+        api = AkvoradoAPIClient(
+            base_url=creds["api_url"],
+            username=creds["api_user"],
+            password=creds.get("api_password", ""),
+        )
+    else:
+        logger.error(
+            "Akvorado API credentials required. Set AKVORADO_API_URL, "
+            "AKVORADO_API_USER, AKVORADO_API_PASSWORD or configure %s",
+            "~/.config/akvorado/credentials.json",
+        )
+        sys.exit(1)
 
     read_only = cli_read_only if cli_read_only is not None else settings.akvorado_read_only
     if read_only and WRITE_TOOLS:

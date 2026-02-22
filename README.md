@@ -1,6 +1,6 @@
 # clr-akvorado-mcp
 
-Network flow analysis via Akvorado/ClickHouse
+Network flow analysis via the Akvorado Console API
 
 ## Install
 
@@ -16,17 +16,19 @@ uvx clr-akvorado-mcp
 
 ```json
 {
-  "url": "https://akvorado.example.com"
+  "api_url": "https://akvorado.example.com",
+  "api_user": "admin",
+  "api_password": "your-password"
 }
 ```
-
-**Note:** Akvorado typically doesn't require authentication.
 
 **Alternative:** Environment variables are also supported:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `AKVORADO_URL` | Akvorado URL | `https://akvorado.example.com` |
+| `AKVORADO_API_URL` | Akvorado Console API URL | `https://akvorado.example.com` |
+| `AKVORADO_API_USER` | API username | `admin` |
+| `AKVORADO_API_PASSWORD` | API password | — |
 
 See `--help` for additional options:
 
