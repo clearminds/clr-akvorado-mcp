@@ -30,6 +30,14 @@ uvx clr-akvorado-mcp
 | `AKVORADO_API_USER` | API username | `admin` |
 | `AKVORADO_API_PASSWORD` | API password | — |
 
+Optional:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AKVORADO_READ_ONLY` | Run in read-only mode | `false` |
+| `TRANSPORT` | Transport protocol (`stdio` or `http`) | `stdio` |
+| `LOG_LEVEL` | Log level | `INFO` |
+
 See `--help` for additional options:
 
 ```bash

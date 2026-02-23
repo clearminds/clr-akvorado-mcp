@@ -6,6 +6,7 @@ import logging.config
 from pathlib import Path
 from typing import Any, Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,13 @@ class Settings(BaseSettings):
 
     # Default query settings
     akvorado_read_only: bool = False
+
+    @field_validator("akvorado_read_only", mode="before")
+    @classmethod
+    def _empty_str_to_false(cls, v: Any) -> Any:
+        if v == "":
+            return False
+        return v
 
     transport: Literal["stdio", "http"] = "stdio"
     host: str = "127.0.0.1"
