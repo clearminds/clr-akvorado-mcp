@@ -227,6 +227,31 @@ def akvorado_status() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def init_composite() -> FastMCP:
+    """Initialize for composite mounting. Returns the FastMCP instance."""
+    global api
+
+    settings = Settings()
+    creds = settings.load_credentials()
+
+    if not creds.get("api_url") or not creds.get("api_user"):
+        raise RuntimeError(
+            "Missing Akvorado credentials (AKVORADO_API_URL / AKVORADO_API_USER)"
+        )
+
+    api = AkvoradoAPIClient(
+        base_url=creds["api_url"],
+        username=creds["api_user"],
+        password=creds.get("api_password", ""),
+    )
+
+    if settings.akvorado_read_only and WRITE_TOOLS:
+        for name in WRITE_TOOLS:
+            mcp.remove_tool(name)
+
+    return mcp
+
+
 def main() -> None:
     """Main entry point for the Akvorado MCP server."""
     global api
