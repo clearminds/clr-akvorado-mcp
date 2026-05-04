@@ -66,13 +66,18 @@ api: AkvoradoAPIClient | None = None
 
 WRITE_TOOLS: list[str] = []
 
+# Imported here (not at the top) on purpose: annotations.py needs ``mcp`` from
+# this module, so importing it before the ``mcp = FastMCP(...)`` line above
+# would be a circular import. Do not move.
+from clr_akvorado_mcp.annotations import read_tool  # noqa: E402
+
 
 # ---------------------------------------------------------------------------
 # Time-series graph
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool
+@read_tool
 def akvorado_graph(
     dimensions: list[str],
     start: str,
@@ -122,7 +127,7 @@ def akvorado_graph(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool
+@read_tool
 def akvorado_sankey(
     dimensions: list[str],
     start: str,
@@ -164,7 +169,7 @@ def akvorado_sankey(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool
+@read_tool
 def akvorado_top(
     dimension: str,
 ) -> list[dict[str, Any]]:
@@ -188,7 +193,7 @@ def akvorado_top(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool
+@read_tool
 def akvorado_exporters() -> list[dict[str, Any]]:
     """List all flow exporters known to Akvorado.
 
@@ -203,7 +208,7 @@ def akvorado_exporters() -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool
+@read_tool
 def akvorado_status() -> dict[str, Any]:
     """Get Akvorado dashboard status: flow rate, last flow, and exporters.
 
