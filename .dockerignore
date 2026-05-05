@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+*.egg-info
+docs
+tests
+.ruff_cache
+uv.lock
+.env*
+.mcp.json
+README.md
