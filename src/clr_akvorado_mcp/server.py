@@ -64,7 +64,10 @@ mcp = FastMCP("Akvorado")
 mcp.add_middleware(ToolValidationMiddleware())
 api: AkvoradoAPIClient | None = None
 
-WRITE_TOOLS: list[str] = []
+# Imported here (not at the top) on purpose: annotations.py needs ``mcp`` from
+# this module, so importing it before the ``mcp = FastMCP(...)`` line above
+# would be a circular import. Do not move.
+from clr_akvorado_mcp.annotations import read_tool, remove_non_read_tools  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +75,7 @@ WRITE_TOOLS: list[str] = []
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool
+@read_tool
 def akvorado_graph(
     dimensions: list[str],
     start: str,
@@ -122,7 +125,7 @@ def akvorado_graph(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool
+@read_tool
 def akvorado_sankey(
     dimensions: list[str],
     start: str,
@@ -164,7 +167,7 @@ def akvorado_sankey(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool
+@read_tool
 def akvorado_top(
     dimension: str,
 ) -> list[dict[str, Any]]:
@@ -188,7 +191,7 @@ def akvorado_top(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool
+@read_tool
 def akvorado_exporters() -> list[dict[str, Any]]:
     """List all flow exporters known to Akvorado.
 
@@ -203,7 +206,7 @@ def akvorado_exporters() -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool
+@read_tool
 def akvorado_status() -> dict[str, Any]:
     """Get Akvorado dashboard status: flow rate, last flow, and exporters.
 
@@ -292,10 +295,9 @@ def main() -> None:
         sys.exit(1)
 
     read_only = cli_read_only if cli_read_only is not None else settings.akvorado_read_only
-    if read_only and WRITE_TOOLS:
-        for name in WRITE_TOOLS:
-            mcp.remove_tool(name)
-        logger.info("Read-only mode: %d write tools removed", len(WRITE_TOOLS))
+    if read_only:
+        removed = remove_non_read_tools(mcp)
+        logger.info("Read-only mode: %d non-read tools removed", removed)
 
     try:
         if settings.transport == "stdio":
