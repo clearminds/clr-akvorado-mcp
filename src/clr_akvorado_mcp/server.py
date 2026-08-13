@@ -84,6 +84,7 @@ def akvorado_graph(
     units: str = "l3bps",
     limit: int = 10,
     bidirectional: bool = False,
+    points: int = 100,
 ) -> dict[str, Any]:
     """Query Akvorado for time-series traffic data (line graph).
 
@@ -103,20 +104,25 @@ def akvorado_graph(
             "pps" (packets/s), "inl2%" (inbound L2 %), "outl2%" (outbound L2 %).
         limit: Max number of dimension groups to return (default 10).
         bidirectional: If true, show both directions separately.
+        points: Number of time buckets in the series (graph resolution, default 100).
 
     Returns:
         Graph data with time points, rows (dimension labels), and statistics.
     """
+    # The console's graph/line endpoint requires points, limitType, previousPeriod
+    # and filter to always be present — omitting any of them returns HTTP 400.
     payload: dict[str, Any] = {
         "start": start,
         "end": end,
+        "points": points,
         "dimensions": dimensions,
         "limit": limit,
+        "limitType": "avg",
         "units": units,
         "bidirectional": bidirectional,
+        "previousPeriod": False,
+        "filter": filter,
     }
-    if filter:
-        payload["filter"] = filter
     return api.post("/api/v0/console/graph/line", json=payload)
 
 
