@@ -2,7 +2,9 @@
 
 import argparse
 import logging
+import re
 import sys
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastmcp import FastMCP
@@ -70,6 +72,30 @@ api: AkvoradoAPIClient | None = None
 from clr_akvorado_mcp.annotations import read_tool, remove_non_read_tools  # noqa: E402
 
 
+_REL_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
+_REL_WORDS = {"second": 1, "minute": 60, "hour": 3600, "day": 86400, "week": 604800}
+
+
+def _resolve_time(value: str) -> str:
+    """Resolve a relative time expression to an absolute UTC ISO-8601 string.
+
+    The Akvorado console API only accepts absolute timestamps, but these tools
+    advertise relative inputs. Handles absolute ISO (passed through), ``now``,
+    Grafana-style ``now-1d`` / ``now-6h`` / ``now-30m``, and human ``6 hours ago``.
+    """
+    low = value.strip().lower()
+    now = datetime.now(timezone.utc)
+    if low == "now":
+        delta = 0
+    elif (m := re.fullmatch(r"now\s*-\s*(\d+)\s*([smhdw])", low)) is not None:
+        delta = int(m.group(1)) * _REL_UNITS[m.group(2)]
+    elif (m := re.fullmatch(r"(\d+)\s*(second|minute|hour|day|week)s?\s+ago", low)) is not None:
+        delta = int(m.group(1)) * _REL_WORDS[m.group(2)]
+    else:
+        return value.strip()  # assume it is already an absolute timestamp
+    return (now - timedelta(seconds=delta)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 # ---------------------------------------------------------------------------
 # Time-series graph
 # ---------------------------------------------------------------------------
@@ -112,8 +138,8 @@ def akvorado_graph(
     # The console's graph/line endpoint requires points, limitType, previousPeriod
     # and filter to always be present — omitting any of them returns HTTP 400.
     payload: dict[str, Any] = {
-        "start": start,
-        "end": end,
+        "start": _resolve_time(start),
+        "end": _resolve_time(end),
         "points": points,
         "dimensions": dimensions,
         "limit": limit,
