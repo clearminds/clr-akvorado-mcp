@@ -102,7 +102,7 @@ def _resolve_time(value: str) -> str:
 
 
 @read_tool
-def akvorado_graph(
+def graph(
     dimensions: list[str],
     start: str,
     end: str,
@@ -158,7 +158,7 @@ def akvorado_graph(
 
 
 @read_tool
-def akvorado_sankey(
+def sankey(
     dimensions: list[str],
     start: str,
     end: str,
@@ -200,7 +200,7 @@ def akvorado_sankey(
 
 
 @read_tool
-def akvorado_top(
+def top(
     dimension: str,
 ) -> list[dict[str, Any]]:
     """Get top-5 by a single dimension from the Akvorado dashboard widget.
@@ -224,7 +224,7 @@ def akvorado_top(
 
 
 @read_tool
-def akvorado_exporters() -> list[dict[str, Any]]:
+def exporters() -> list[dict[str, Any]]:
     """List all flow exporters known to Akvorado.
 
     Returns:
@@ -239,7 +239,7 @@ def akvorado_exporters() -> list[dict[str, Any]]:
 
 
 @read_tool
-def akvorado_status() -> dict[str, Any]:
+def status() -> dict[str, Any]:
     """Get Akvorado dashboard status: flow rate, last flow, and exporters.
 
     Combines multiple widget endpoints into a single overview.
